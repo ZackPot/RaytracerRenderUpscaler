@@ -1,42 +1,32 @@
-import os
-from PIL import Image
-import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
 
-def img_extract(target_letter):
-    print('LQ')
-    root_dir = './images/'
-    filenames = []
-    images = []
+X = tf.keras.utils.image_dataset_from_directory(
+    'images/lq', label_mode=None, image_size=(100, 100), batch_size=4, shuffle=False)
 
-    for root, dirs, files in os.walk(root_dir):
-        for filename in files:
-            if filename.lower().startswith(target_letter.lower()):
-                filenames.append(os.path.join(root, filename))
+y = tf.keras.utils.image_dataset_from_directory(
+    'images/hq', label_mode=None, image_size=(2000, 2000), batch_size=4, shuffle=False)
 
-    for image in filenames:
-        img = np.array(Image.open(image))
-        img = img.astype('float32') / 255.0
-        images.append(img.reshape(-1))
+ds = tf.data.Dataset.zip((X, y)).map(lambda x, y: (x/255.0, y/255.0))
 
-    return images
-
-X = img_extract('l')
-y = img_extract('h')
+for x_batch, y_batch in ds.take(1):
+    print(f"Low-Res Shape: {x_batch[0].shape}")
+    print(f"High-Res Shape: {y_batch[0].shape}")
 
 try:
     model = tf.keras.models.Sequential([
-        layers.Dense(64, activation='relu'),
-        layers.Dropout(0.4),
-        layers.Dense(128, activation='relu'),
-        layers.Dense(len(y[0]), activation='sigmoid'),
+        layers.Input(shape=(100, 100, 3)),
+        layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+        layers.UpSampling2D(size=(5, 5)),
+        layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        layers.UpSampling2D(size=(4, 4)),
+        layers.Conv2D(3, (3, 3), activation='sigmoid', padding='same')
     ])
 
-    model.compile(optimizer='adam', loss='mme', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 
     tf.keras.utils.plot_model(model, to_file='model.png', show_shapes=True)
-    model.fit(X, y, epochs=10)
+    model.fit(ds, epochs=10)
     model.save('upscaler.h5')
 except Exception as e:
     print(e)
