@@ -1,12 +1,17 @@
 import tensorflow as tf
 from tensorflow.keras import layers
+ 
+gpu_devices = tf.config.list_physical_devices('GPU')
+if gpu_devices:
+    tf.config.experimental.set_memory_growth(gpu_devices[0], True)
 
 X = tf.keras.utils.image_dataset_from_directory(
-    'images/lq', label_mode=None, image_size=(100, 100), batch_size=4, shuffle=False)
+    'images/lq', label_mode=None, image_size=(100, 100), batch_size=2, shuffle=False)
 
 y = tf.keras.utils.image_dataset_from_directory(
-    'images/hq', label_mode=None, image_size=(2000, 2000), batch_size=4, shuffle=False)
+    'images/hq', label_mode=None, image_size=(600, 600), batch_size=2, shuffle=False)
 
+# noinspection PyShadowingNames
 ds = tf.data.Dataset.zip((X, y)).map(lambda x, y: (x/255.0, y/255.0))
 
 for x_batch, y_batch in ds.take(1):
@@ -17,15 +22,16 @@ try:
     model = tf.keras.models.Sequential([
         layers.Input(shape=(100, 100, 3)),
         layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
-        layers.UpSampling2D(size=(5, 5)),
+        layers.Dropout(0.2),
+        layers.UpSampling2D(size=(2, 2)),
         layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
-        layers.UpSampling2D(size=(4, 4)),
+        layers.UpSampling2D(size=(3, 3)),
         layers.Conv2D(3, (3, 3), activation='sigmoid', padding='same')
     ])
 
     model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 
-    tf.keras.utils.plot_model(model, to_file='model.png', show_shapes=True)
+    model.summary()
     model.fit(ds, epochs=10)
     model.save('upscaler.h5')
 except Exception as e:
